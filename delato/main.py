@@ -1,6 +1,7 @@
 import sys
 
 from oslo.config import cfg
+import delato
 
 CONF = cfg.CONF
 
