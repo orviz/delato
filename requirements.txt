@@ -1,1 +1,4 @@
 oslo.config
+pyzabbix
+requests
+python-rtkit
