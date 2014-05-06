@@ -1,13 +1,16 @@
 import sys
+import delato.config
+import delato.log
+import delato.zabbix
 
 from oslo.config import cfg
-import delato.config
-import delato.zabbix
 
 CONF = cfg.CONF
 
 def main():
     delato.config.parse_args(sys.argv)
+    delato.log.setup_logging()
+
     zabbix = delato.zabbix.Zabbix()
     zabbix.collect()
 

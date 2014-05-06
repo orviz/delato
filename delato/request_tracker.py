@@ -7,7 +7,6 @@ from rtkit.resource import RTResource
 from rtkit.authenticators import CookieAuthenticator
 
 
-logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 opts = [
