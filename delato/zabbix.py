@@ -5,7 +5,6 @@ import time
 from oslo.config import cfg
 from pyzabbix import ZabbixAPI
 
-logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 opts = [
