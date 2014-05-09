@@ -1,6 +1,7 @@
 import logging
 import requests
 import time
+import delato.request_tracker
 
 from oslo.config import cfg
 from pyzabbix import ZabbixAPI
@@ -17,22 +18,40 @@ opts = [
     cfg.StrOpt('password',
                default='',
                help='Password to authenticate with.'),
-    cfg.IntOpt('severity_5',
+    cfg.StrOpt('severity_5_name',
+               default='Disaster',
+               help='Name for severity 5.'),
+    cfg.IntOpt('severity_5_expiration',
                default='',
                help='Age limit of severity/priority 5.'),
-    cfg.IntOpt('severity_4',
+    cfg.StrOpt('severity_4_name',
+               default='High',
+               help='Name for severity 4.'),
+    cfg.IntOpt('severity_4_expiration',
                default='',
                help='Age limit of severity/priority 4.'),
-    cfg.IntOpt('severity_3',
+    cfg.StrOpt('severity_3_name',
+               default='Average',
+               help='Name for severity 3.'),
+    cfg.IntOpt('severity_3_expiration',
                default='',
                help='Age limit of severity/priority 3.'),
-    cfg.IntOpt('severity_2',
+    cfg.StrOpt('severity_2_name',
+               default='Warning',
+               help='Name for severity 2.'),
+    cfg.IntOpt('severity_2_expiration',
                default='',
                help='Age limit of severity/priority 2.'),
-    cfg.IntOpt('severity_1',
+    cfg.StrOpt('severity_1_name',
+               default='Information',
+               help='Name for severity 1.'),
+    cfg.IntOpt('severity_1_expiration',
                default='',
                help='Age limit of severity/priority 1.'),
-    cfg.IntOpt('severity_0',
+    cfg.StrOpt('severity_0_name',
+               default='Not Classified',
+               help='Name for severity 0.'),
+    cfg.IntOpt('severity_0_expiration',
                default='',
                help='Age limit of severity/priority 0.'),
 ]
@@ -74,15 +93,36 @@ class Zabbix(object):
                 **kw)
 
     def collect(self):
-        for severity, age in [(0, CONF.zabbix.severity_0),
-                              (1, CONF.zabbix.severity_1),
-                              (2, CONF.zabbix.severity_2),
-                              (3, CONF.zabbix.severity_3),
-                              (4, CONF.zabbix.severity_4),
-                              (5, CONF.zabbix.severity_5),]:
-            if age:
+        rt = delato.request_tracker.RequestTracker()
+        for severity, severity_name, expiration in [(0,
+                                      CONF.zabbix.severity_0_name,
+                                      CONF.zabbix.severity_0_expiration),
+                                     (1,
+                                      CONF.zabbix.severity_1_name,
+                                      CONF.zabbix.severity_1_expiration),
+                                     (2,
+                                      CONF.zabbix.severity_2_name,
+                                      CONF.zabbix.severity_2_expiration),
+                                     (3,
+                                      CONF.zabbix.severity_3_name,
+                                      CONF.zabbix.severity_3_expiration),
+                                     (4,
+                                      CONF.zabbix.severity_4_name,
+                                      CONF.zabbix.severity_4_expiration),
+                                     (5,
+                                      CONF.zabbix.severity_5_name,
+                                      CONF.zabbix.severity_5_expiration),]:
+            if expiration:
                 for d in self._get_triggers(priority=severity):
-                    age_in_epoch = float(d["lastchange"])
-                    if time.time()-age_in_epoch > age:
-                        logger.debug("Zabbix trigger (%s) is above the age limit (%s)"
-                                     % (d, age))
+                    expiration_in_epoch = float(d["lastchange"])
+                    if time.time()-expiration_in_epoch > expiration:
+                        logger.info("Zabbix trigger (%s) is above the due date limit (%s)"
+                                     % (d, expiration))
+                        
+                        rt.create_ticket(d["triggerid"],
+                                         description = d["description"],
+                                         host        = d["hostname"], 
+                                         age         = time.ctime(float(d["lastchange"])),
+                                         severity    = severity_name,
+                                         expiration  = expiration,)  
+
