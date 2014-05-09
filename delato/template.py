@@ -13,7 +13,7 @@ severity expiration ($$expiration seconds).
 - Age: $$age.
 
 
-** Please take the appropriate actions to resolve the issue.
+** Please take the appropriate actions to resolve the issue.  **
 
 -- Ticket automatically created by delato. --
 """
@@ -21,9 +21,9 @@ severity expiration ($$expiration seconds).
 UPDATE_TICKET_BODY="""
 Friendly reminder for acting in the problem described above.
 
-Please take the appropriate actions to resolve the issue.
+** Please take the appropriate actions to resolve the issue. **
 
-Ticket automatically updated by delato.
+-- Ticket automatically updated by delato. --
 """
 
 CLOSE_TICKET_BODY="""
@@ -31,5 +31,5 @@ The issue described is no longer present.
 
 Thanks for the accurate response.
 
-Ticket automatically closed by delato.
+-- Ticket automatically closed by delato. --
 """

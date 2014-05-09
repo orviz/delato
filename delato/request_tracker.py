@@ -1,4 +1,5 @@
 import logging
+import time
 
 import delato.template
 import delato.exception
@@ -25,6 +26,9 @@ opts = [
     cfg.StrOpt('queue',
                default='',
                help='Queue to work with.'),
+    cfg.StrOpt('alarm_custom_field',
+               default='AlarmID',
+               help="RT custom field to store the alarm's id."),
     cfg.StrOpt('new_subject',
                default=delato.template.NEW_TICKET_SUBJECT,
                help='Subject for opening tickets.'),
@@ -37,9 +41,9 @@ opts = [
     cfg.StrOpt('close_body',
                default=delato.template.CLOSE_TICKET_BODY,
                help='Message body for closing tickets.'),
-    cfg.StrOpt('alarm_custom_field',
-               default='AlarmID',
-               help="RT custom field to store the alarm's id."),
+    cfg.IntOpt('reminder_update',
+               default=0,
+               help="Seconds since ticket's last update."),
 ]
 
 CONF = cfg.CONF
@@ -49,8 +53,9 @@ CONF.register_opts(opts, group="request_tracker")
 class RequestTracker(object):
     def __init__(self):
         self.conn  = self._connect()
-        self.cache = self._create_cache()
-        print self.cache
+        self.cache = []
+        
+        self.load_cache()
 
     def _connect(self):
         return RTResource('%s/REST/1.0/' % CONF.request_tracker.url,
@@ -58,8 +63,11 @@ class RequestTracker(object):
                           CONF.request_tracker.password, 
                           CookieAuthenticator)
    
-    def _create_cache(self):
-        """Stores the open tickets in memory."""
+    def load_cache(self):
+        """Stores the open tickets in memory.
+
+           Just stores the ones with the custom field set.
+        """
         response = self.conn.get(path=("search/ticket?query=Queue='%s'"
                                         "+AND+(Status='new'+OR+Status='"
                                         "open'+OR+Status='stalled')" 
@@ -67,11 +75,16 @@ class RequestTracker(object):
         l = []
         for t in response.parsed[0]:
             id, title = t
-            l.append(dict(self.conn.get(path="ticket/%s" % id).parsed[0]))
-        return l
+            d = dict(self.conn.get(path="ticket/%s" % id).parsed[0])
+            if d['CF.{%s}' % CONF.request_tracker.alarm_custom_field]:
+                l.append(d)
+        
+        self.cache = l
+        logger.debug("Cache content: %s" % self.cache)
 
     def _find(self, alarm_id):
-        """Searches for a ticket that contains the <alarm_id>.
+        """Searches for a ticket that contains the <alarm_id> in the custom
+           field specified in configuration.
 
            Returns a dictionary with the ticket's fields if found.
         """
@@ -90,8 +103,23 @@ class RequestTracker(object):
             logger.info("No matching ticket found for alarm ID <%s>" % alarm_id)
         return False
 
+    def comment(self, ticket_id, **kwargs):
+        """Comments a ticket.
+        
+           <ticket_id> has the format 'ticket/<id>'
+        """
+        payload = {
+            "content": {
+                "Action": "comment",
+                "Text": Template(CONF.request_tracker.update_body).substitute(kwargs),
+            }
+        }
+        response = self.conn.post(path="%s/comment" % ticket_id, payload=payload)
+        if response.status_int != 200:
+            raise delato.exception.UpdateTicketException(response.status)
 
-    def create_ticket(self, alarm_id, **kwargs):
+
+    def create(self, alarm_id, **kwargs):
         """Creates a new ticket.
 
            <alarm_id> is an unique ID that identifies the alarm, so that
@@ -101,24 +129,24 @@ class RequestTracker(object):
         kwargs.update({"alarm_id": alarm_id})
         logger.debug("Keyword arguments: %s" % kwargs)
         try:
-            content = {
-                'content': {
-                    'Queue'  : CONF.request_tracker.queue,
-                    'Subject': Template(CONF.request_tracker.new_subject).substitute(kwargs),
-                    'Text'   : Template(CONF.request_tracker.new_body).substitute(kwargs),
+            payload = {
+                "content": {
+                    "Queue"  : CONF.request_tracker.queue,
+                    "Subject": Template(CONF.request_tracker.new_subject).substitute(kwargs),
+                    "Text"   : Template(CONF.request_tracker.new_body).substitute(kwargs),
                 }
             }
         except KeyError, e:
             raise delato.exception.MissingTemplateArgument(str(e))
 
         if CONF.request_tracker.alarm_custom_field: 
-            content["content"]["CF-%s" % CONF.request_tracker.alarm_custom_field] = alarm_id
+            payload["content"]["CF-%s" % CONF.request_tracker.alarm_custom_field] = alarm_id
        
-        logger.debug("Ticket content: %s" % content["content"])
+        logger.debug("Ticket content: %s" % payload["content"])
         if not self._find(alarm_id):
             logging.info("Creating ticket for alarm ID: %s" % alarm_id)
             try:
-                response = self.conn.post(path='ticket/new', payload=content,)
+                response = self.conn.post(path='ticket/new', payload=payload,)
                 logger.info("Ticket created: %s" % dir(response))
                 logger.info("Ticket status: %s" % response.status)
                 logger.info("Ticket status int: %s" % response.status_int)

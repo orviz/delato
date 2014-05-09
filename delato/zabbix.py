@@ -119,7 +119,7 @@ class Zabbix(object):
                         logger.info("Zabbix trigger (%s) is above the due date limit (%s)"
                                      % (d, expiration))
                         
-                        rt.create_ticket(d["triggerid"],
+                        rt.create(d["triggerid"],
                                          description = d["description"],
                                          host        = d["hostname"], 
                                          age         = time.ctime(float(d["lastchange"])),
