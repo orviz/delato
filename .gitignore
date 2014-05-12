@@ -9,4 +9,5 @@
 build/*
 dist/*
 delator/*
-etc/*
+etc/delato.conf
+etc/followups.yaml

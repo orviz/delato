@@ -53,8 +53,8 @@ class TicketCreatorThread(threading.Thread):
                                      description = d["description"],
                                      host        = d["hostname"], 
                                      age         = time.ctime(float(d["lastchange"])),
-                                     severity    = severity_name,
-                                     expiration  = expiration,)  
+                                     severity    = d["severity"],
+                                     expiration  = d["expiration"])  
             self.event.wait(10)
         logger.info("Exiting from TicketCreatorThread.")
 
