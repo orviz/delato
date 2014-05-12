@@ -1,0 +1,78 @@
+[DEFAULT]
+# Show more verbose log output (sets INFO log level output)
+verbose = True
+
+# Show debugging output in logs (sets DEBUG log level output)
+debug = True
+
+# Send logs to /dev/stderr
+use_stderr = True
+
+# Send logs to syslog (/dev/log) instead of to file specified
+# by `log_file`
+use_syslog = False
+
+# ================= Zabbix Options ============================
+#[zabbix]
+
+# URL where Zabbix can be accessed
+#url = https://localhost.example.com/zabbix
+
+# Login name 
+#username = username
+
+# Passord 
+#password = password
+
+# Seconds to wait before creating tickets for the alarms identified.
+# Defaults to nothing.
+#severity_5_expiration = 3600
+#severity_4_expiration = 86400
+#severity_3_expiration = 172800
+#severity_2_expiration = 259200
+#severity_1_expiration = 
+#severity_0_expiration = 
+
+# Custom name for the Zabbix severities
+# Defaults: (5, Disaster), (4, High), (3, Average), (2, Warning), 
+#           (1, Information), (0, Not Supported)
+#severity_5_name = 
+#severity_4_name = 
+#severity_3_name = 
+#severity_2_name = 
+#severity_1_name = 
+#severity_0_name = 
+
+# ================= Request Tracker Options ============================
+#[request_tracker]
+
+# URL where Request Tracker can be accessed
+#url = https://localhost.example.com/rt
+
+# Login name
+#username = username
+
+# Password
+#password = password
+
+# Queue name where ticket will be opened
+#queue = queue
+
+# Time (in seconds) to wait before updating the ticket
+#reminder_update = 432000
+
+# Custom field name to be used for identifying tickets opened by delato.
+# Defaults: AlarmID
+#alarm_custom_field =
+
+# Subject to be used when creating a ticket.
+# Defaults: delato.template.NEW_TICKET_SUBJECT
+#new_subject =
+
+# Body to be used when creating a ticket.
+# Defaults: delato.template.NEW_TICKET_BODY
+#new_body =
+
+# Body to be used when creating a ticket.
+# Defaults: delato.template.UPDATE_TICKET_BODY
+#update_body =
