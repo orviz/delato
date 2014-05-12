@@ -1,5 +1,6 @@
 import logging
 import logging.handlers
+import os
 
 from oslo.config import cfg
 
@@ -23,6 +24,9 @@ opts = [
     cfg.BoolOpt('use_syslog',
                 default=False,
                 help='Log output to syslog'),
+    cfg.StrOpt('log_to_file',
+                default='',
+                help='Log output to the given file'),
 ]
 
 CONF = cfg.CONF
@@ -31,10 +35,13 @@ CONF.register_opts(opts)
 
 def setup_logging():
     logger = logging.getLogger()
+
     if CONF.use_stderr:
         logger.addHandler(logging.StreamHandler(open('/dev/stderr', 'w')))
     if CONF.use_syslog:
         logger.addHandler(logging.handlers.SysLogHandler(address='/dev/log'))
+    if CONF.log_to_file:
+        logger.addHandler(logging.FileHandler(cfg.CONF.log_to_file))
     
     if CONF.debug:
         logger.setLevel(logging.DEBUG)
