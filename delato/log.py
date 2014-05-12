@@ -41,7 +41,7 @@ def setup_logging():
     if CONF.use_syslog:
         logger.addHandler(logging.handlers.SysLogHandler(address='/dev/log'))
     if CONF.log_file:
-        logger.addHandler(logging.FileHandler(cfg.CONF.log_file))
+        logger.addHandler(logging.FileHandler(CONF.log_file))
     
     if CONF.debug:
         logger.setLevel(logging.DEBUG)
