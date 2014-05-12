@@ -1,7 +1,6 @@
 import sys
 import delato.config
 import delato.log
-import delato.zabbix
 import delato.threads
 
 from oslo.config import cfg
@@ -12,8 +11,9 @@ def main():
     delato.config.parse_args(sys.argv)
     delato.log.setup_logging()
 
-    #zabbix = delato.zabbix.Zabbix()
-    #zabbix.collect()
+    t_alarm = delato.threads.TicketCreatorThread()
+    t_alarm.start()
+    t_alarm.join()
 
     t_reminder = delato.threads.TicketReminderThread()
     t_reminder.start()

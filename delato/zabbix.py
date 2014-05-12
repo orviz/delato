@@ -93,7 +93,7 @@ class Zabbix(object):
                 **kw)
 
     def collect(self):
-        rt = delato.request_tracker.RequestTracker()
+        l = []
         for severity, severity_name, expiration in [(0,
                                       CONF.zabbix.severity_0_name,
                                       CONF.zabbix.severity_0_expiration),
@@ -114,15 +114,6 @@ class Zabbix(object):
                                       CONF.zabbix.severity_5_expiration),]:
             if expiration:
                 for d in self._get_triggers(priority=severity):
-                    expiration_in_epoch = float(d["lastchange"])
-                    if time.time()-expiration_in_epoch > expiration:
-                        logger.info("Zabbix trigger (%s) is above the due date limit (%s)"
-                                     % (d, expiration))
-                        
-                        rt.create(d["triggerid"],
-                                         description = d["description"],
-                                         host        = d["hostname"], 
-                                         age         = time.ctime(float(d["lastchange"])),
-                                         severity    = severity_name,
-                                         expiration  = expiration,)  
-
+                    d.update({ "severity": severity_name, "expiration": expiration })
+                    l.append(d)
+        return l
