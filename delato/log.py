@@ -24,7 +24,7 @@ opts = [
     cfg.BoolOpt('use_syslog',
                 default=False,
                 help='Log output to syslog'),
-    cfg.StrOpt('log_to_file',
+    cfg.StrOpt('log_file',
                 default='',
                 help='Log output to the given file'),
 ]
@@ -40,8 +40,8 @@ def setup_logging():
         logger.addHandler(logging.StreamHandler(open('/dev/stderr', 'w')))
     if CONF.use_syslog:
         logger.addHandler(logging.handlers.SysLogHandler(address='/dev/log'))
-    if CONF.log_to_file:
-        logger.addHandler(logging.FileHandler(cfg.CONF.log_to_file))
+    if CONF.log_file:
+        logger.addHandler(logging.FileHandler(cfg.CONF.log_file))
     
     if CONF.debug:
         logger.setLevel(logging.DEBUG)

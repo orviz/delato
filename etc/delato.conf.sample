@@ -8,9 +8,11 @@ debug = True
 # Send logs to /dev/stderr
 use_stderr = True
 
-# Send logs to syslog (/dev/log) instead of to file specified
-# by `log_file`
+# Send logs to syslog (/dev/log)
 use_syslog = False
+
+# Log to a given file
+#log_file = /var/log/delato.log 
 
 # ================= Zabbix Options ============================
 #[zabbix]
