@@ -36,7 +36,7 @@ class TicketReminderThread(threading.Thread):
 
 class TicketCreatorThread(threading.Thread): 
     def __init__(self, its=delato.request_tracker.RequestTracker, mon=delato.zabbix.Zabbix):
-        super(AlarmToTicketThread, self).__init__()
+        super(TicketCreatorThread, self).__init__()
         self.event = threading.Event()
         self.its = its()
         self.mon = mon()
