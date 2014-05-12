@@ -3,3 +3,6 @@ class MissingTemplateArgument(Exception):
 
 class CreateTicketException(Exception):
     pass
+
+class UpdateTicketException(Exception):
+    pass
