@@ -3,6 +3,7 @@ import threading
 import time
 
 import delato.request_tracker
+import delato.zabbix
 
 
 logger = logging.getLogger(__name__)
