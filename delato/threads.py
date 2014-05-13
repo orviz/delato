@@ -5,8 +5,20 @@ import time
 import delato.request_tracker
 import delato.zabbix
 
+from oslo.config import cfg
+
 
 logger = logging.getLogger(__name__)
+
+
+opts = [
+    cfg.BoolOpt('invalidate_tickets',
+               default=False,
+               help='Invalidates all the tickets being created by delato.'),
+]
+
+CONF = cfg.CONF
+CONF.register_opts(opts)
 
 
 class TicketReminderThread(threading.Thread):
@@ -42,6 +54,9 @@ class TicketCreatorThread(threading.Thread):
         self.mon = mon()
 
     def run(self):
+        if CONF.invalidate_tickets:
+            self.its.set_status([d["id"] for d in self.its.get_ticket()], "rejected")
+
         while not self.event.is_set():
             for d in self.mon.collect():
                 expiration_in_epoch = float(d["lastchange"])
