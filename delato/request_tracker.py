@@ -44,6 +44,9 @@ opts = [
     cfg.IntOpt('reminder_update',
                default=0,
                help="Seconds since ticket's last update."),
+    cfg.BoolOpt('noop',
+               default=False,
+               help="Do not execute POST operations."),
 ]
 
 CONF = cfg.CONF
@@ -55,6 +58,8 @@ class RequestTracker(object):
         self.conn  = self._connect()
         self.cache = []
         
+        if CONF.request_tracker.noop:
+            logger.info("Requested noop option. Will not execute POST (create, edit, ..) operations.")
         self.load_cache()
 
 
@@ -118,9 +123,10 @@ class RequestTracker(object):
         
         payload = { "content": {'Status': status}}
         for t_id in ticket_id:
-            response = self.conn.post(path="%s/edit" % t_id, payload=payload)
-            if response.status_int != 200:
-                raise delato.exception.UpdateTicketException(response.status)
+            if not CONF.request_tracker.noop:
+                response = self.conn.post(path="%s/edit" % t_id, payload=payload)
+                if response.status_int != 200:
+                    raise delato.exception.UpdateTicketException(response.status)
             logger.debug("Ticket %s set to %s status" % (t_id, status))
 
 
@@ -135,9 +141,10 @@ class RequestTracker(object):
                 "Text": Template(CONF.request_tracker.update_body).substitute(kwargs),
             }
         }
-        response = self.conn.post(path="%s/comment" % ticket_id, payload=payload)
-        if response.status_int != 200:
-            raise delato.exception.UpdateTicketException(response.status)
+        if not CONF.request_tracker.noop:
+            response = self.conn.post(path="%s/comment" % ticket_id, payload=payload)
+            if response.status_int != 200:
+                raise delato.exception.UpdateTicketException(response.status)
 
 
     def create(self, alarm_id, **kwargs):
@@ -166,21 +173,22 @@ class RequestTracker(object):
         logger.debug("Ticket content: %s" % payload["content"])
         if not self._find(alarm_id):
             logging.info("Creating ticket for alarm ID: %s" % alarm_id)
-            try:
-                response = self.conn.post(path='ticket/new', payload=payload,)
-                logger.info("Ticket created: %s" % dir(response))
-                logger.info("Ticket status: %s" % response.status)
-                logger.info("Ticket status int: %s" % response.status_int)
-                logger.info("Ticket body: %s" % response.body)
-                logger.info("Ticket parsed: %s" % response.parsed)
-                if response.status_int != 200:
-                    raise delato.exception.CreateTicketException(response.status)
-                ticket_id = response.parsed[0][0][1].split("/")[1]
-                logger.info("Ticket %s has been successfully created" % ticket_id)
-            except RTResourceError as e:
-                logger.error(e.response.status_int)
-                logger.error(e.response.status)
-                logger.error(e.response.parsed)
+            if not CONF.request_tracker.noop:
+                try:
+                    response = self.conn.post(path='ticket/new', payload=payload,)
+                    logger.info("Ticket created: %s" % dir(response))
+                    logger.info("Ticket status: %s" % response.status)
+                    logger.info("Ticket status int: %s" % response.status_int)
+                    logger.info("Ticket body: %s" % response.body)
+                    logger.info("Ticket parsed: %s" % response.parsed)
+                    if response.status_int != 200:
+                        raise delato.exception.CreateTicketException(response.status)
+                    ticket_id = response.parsed[0][0][1].split("/")[1]
+                    logger.info("Ticket %s has been successfully created" % ticket_id)
+                except RTResourceError as e:
+                    logger.error(e.response.status_int)
+                    logger.error(e.response.status)
+                    logger.error(e.response.parsed)
         else:
             logging.debug("Not creating ticket for alarm ID <%s>" % alarm_id)
 

@@ -14,6 +14,11 @@ use_syslog = False
 # Log to a given file
 #log_file = /var/log/delato.log 
 
+# Invalidates (set to rejected) all the tickets being tracked
+# by delato.
+# Defaults: False
+#invalidate_tickets = False
+
 # ================= Zabbix Options ============================
 #[zabbix]
 
@@ -78,3 +83,7 @@ use_syslog = False
 # Body to be used when creating a ticket.
 # Defaults: delato.template.UPDATE_TICKET_BODY
 #update_body =
+
+# POST actions (create, edit, ..) on tickets will not be executed.
+# Defaults: False
+#noop = False
