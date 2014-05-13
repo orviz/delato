@@ -57,30 +57,13 @@ class RequestTracker(object):
         
         self.load_cache()
 
+
     def _connect(self):
         return RTResource('%s/REST/1.0/' % CONF.request_tracker.url,
                           CONF.request_tracker.username, 
                           CONF.request_tracker.password, 
                           CookieAuthenticator)
-   
-    def load_cache(self):
-        """Stores the open tickets in memory.
-
-           Just stores the ones with the custom field set.
-        """
-        response = self.conn.get(path=("search/ticket?query=Queue='%s'"
-                                        "+AND+(Status='new'+OR+Status='"
-                                        "open'+OR+Status='stalled')" 
-                                        % CONF.request_tracker.queue))
-        l = []
-        for t in response.parsed[0]:
-            id, title = t
-            d = dict(self.conn.get(path="ticket/%s" % id).parsed[0])
-            if d['CF.{%s}' % CONF.request_tracker.alarm_custom_field]:
-                l.append(d)
-        
-        self.cache = l
-        logger.debug("Cache content: %s" % self.cache)
+  
 
     def _find(self, alarm_id):
         """Searches for a ticket that contains the <alarm_id> in the custom
@@ -102,6 +85,44 @@ class RequestTracker(object):
                              % (t, CONF.request_tracker.alarm_custom_field))
             logger.info("No matching ticket found for alarm ID <%s>" % alarm_id)
         return False
+
+
+    def get_ticket(self, ticket_id=None):
+        if ticket_id:
+            logger.debug("Retrieving ticket %s data" % ticket_id)
+            return [dict(self.conn.get(path="ticket/%s" % ticket_id).parsed[0])]
+        else:
+            logger.debug("Retrieving ALL ticket's data")
+            response = self.conn.get(path=("search/ticket?query=Queue='%s'"
+                                            "+AND+(Status='new'+OR+Status='"
+                                            "open'+OR+Status='stalled')" 
+                                            % CONF.request_tracker.queue))
+            l = []
+            for t in response.parsed[0]:
+                id, title = t
+                d = dict(self.conn.get(path="ticket/%s" % id).parsed[0])
+                if d['CF.{%s}' % CONF.request_tracker.alarm_custom_field]:
+                    l.append(d)
+            return l
+
+
+    def set_status(self, ticket_id, status):
+        """Sets the status of the ticket.
+
+           <ticket_id> is a list of the tickets whose status will be updated. Has the 
+                       format 'ticket/<id>'
+           <status> one of the supported RT ticket status.
+        """
+        if not isinstance(ticket_id, list):
+            raise UpdateTicketException("close function expects a list of tickets as input.")
+        
+        payload = { "content": {'Status': status}}
+        for t_id in ticket_id:
+            response = self.conn.post(path="%s/edit" % t_id, payload=payload)
+            if response.status_int != 200:
+                raise delato.exception.UpdateTicketException(response.status)
+            logger.debug("Ticket %s set to %s status" % (t_id, status))
+
 
     def comment(self, ticket_id, **kwargs):
         """Comments a ticket.
@@ -162,3 +183,13 @@ class RequestTracker(object):
                 logger.error(e.response.parsed)
         else:
             logging.debug("Not creating ticket for alarm ID <%s>" % alarm_id)
+
+
+    def load_cache(self):
+        """Stores the open tickets in memory.
+
+           Just stores the ones with the custom field set.
+        """
+        self.cache = self.get_ticket()
+        logger.debug("Cache content: %s" % self.cache)
+
