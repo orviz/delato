@@ -20,6 +20,24 @@ opts = [
 CONF = cfg.CONF
 CONF.register_opts(opts)
 
+CACHE = {}
+CACHE_LOCK = threading.Lock()
+
+
+class TicketCacheThread(threading.Thread):
+    def __init__(self, its=delato.request_tracker.RequestTracker):
+        super(TicketCacheThread, self).__init__()
+        self.event = threading.Event()
+        self.its = its()
+
+    def run(self):
+        while not self.event.is_set():
+            with CACHE_LOCK:
+                CACHE = self.its.get_ticket()
+                logger.debug("Ticket cache updated. Triggered by CacheThread (regular basis).")
+            self.event.wait(200)
+        logger.info("Exiting from TicketCacheThread.")
+
 
 class TicketReminderThread(threading.Thread):
     def __init__(self, its=delato.request_tracker.RequestTracker):
@@ -70,7 +88,11 @@ class TicketCreatorThread(threading.Thread):
                                      age         = time.ctime(float(d["lastchange"])),
                                      severity    = d["severity"],
                                      expiration  = d["expiration"])
-                    self.load_cache()
+            with CACHE_LOCK:
+                logger.debug("")
+                CACHE = self.its.get_ticket()
+                logger.debug("Ticket cache updated. Triggered by CreatorThread.")
+
             self.event.wait(10)
         logger.info("Exiting from TicketCreatorThread.")
 
