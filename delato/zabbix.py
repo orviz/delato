@@ -61,6 +61,10 @@ CONF.register_opts(opts, group="zabbix")
 
 
 class Zabbix(object):
+    def __init__(self):
+        self.conn = self._connect()
+        logger.debug("Connected to Zabbix API Version %s" % self.conn.api_version())
+
     def _connect(self):
         s = requests.Session()
         s.auth = (CONF.zabbix.username, CONF.zabbix.password)
@@ -71,9 +75,6 @@ class Zabbix(object):
         return conn
 
     def _get_triggers(self, priority=None, wrong_only=True):
-        conn = self._connect()
-        logger.debug("Connected to Zabbix API Version %s" % conn.api_version())
-
         kw = {}
         if wrong_only:
             kw["filter"] = { "value": 1 }
@@ -82,7 +83,7 @@ class Zabbix(object):
                 kw["filter"].update({ "priority": priority })
             except KeyError:
                 kw["filter"] = { "priority": priority }
-        return conn.trigger.get(
+        return self.conn.trigger.get(
                 output=["triggerid", "description", "priority", "value", "lastchange"],
                 expandData="extend",
                 withUnacknowledgedEvents=1,
