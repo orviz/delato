@@ -84,6 +84,10 @@ use_syslog = False
 # Defaults: delato.template.UPDATE_TICKET_BODY
 #update_body =
 
+# Expiration period (in seconds) to refresh the ticket cache.
+# Defaults: 600
+#cache_expiration =
+
 # POST actions (create, edit, ..) on tickets will not be executed.
 # Defaults: False
 #noop = False
