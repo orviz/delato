@@ -41,7 +41,10 @@ def setup_logging():
     if CONF.use_syslog:
         logger.addHandler(logging.handlers.SysLogHandler(address='/dev/log'))
     if CONF.log_file:
-        logger.addHandler(logging.FileHandler(CONF.log_file))
+        fh = logging.FileHandler(CONF.log_file)
+        fh.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        logger.addHandler(fh)
+
     
     if CONF.debug:
         logger.setLevel(logging.DEBUG)
