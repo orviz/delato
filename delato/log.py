@@ -27,6 +27,12 @@ opts = [
     cfg.StrOpt('log_file',
                 default='',
                 help='Log output to the given file'),
+    cfg.BoolOpt('enable_pyzabbix_log',
+                default=False,
+                help='Log pyzabbix module messages'),
+    cfg.BoolOpt('enable_rtkit_log',
+                default=False,
+                help='Log rtkit module messages'),
 ]
 
 CONF = cfg.CONF
@@ -53,4 +59,12 @@ def setup_logging():
         logger.setLevel(logging.INFO)
     else:
         logger.setLevel(logging.WARNING)
+
+    logging.getLogger("requests.packages.urllib3.connectionpool").disabled = True
+    logging.getLogger("pyzabbix").disabled = True
+    logging.getLogger("rtkit").disabled = True
+    if CONF.enable_pyzabbix_log:
+        logging.getLogger("pyzabbix").disabled = False
+    if CONF.enable_rtkit_log:
+        logging.getLogger("rtkit").disabled = False
 

@@ -14,6 +14,14 @@ use_syslog = False
 # Log to a given file
 #log_file = /var/log/delato.log 
 
+# Enables pyzabbix module logging
+# Defaults: False
+#enable_pyzabbix_log = 
+
+# Enables rtkit module logging
+# Defaults: False
+#enable_rtkit_log = 
+
 # Invalidates (set to rejected) all the tickets being tracked
 # by delato.
 # Defaults: False
