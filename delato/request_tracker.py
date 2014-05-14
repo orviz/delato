@@ -47,6 +47,9 @@ opts = [
     cfg.BoolOpt('noop',
                default=False,
                help="Do not execute POST operations."),
+    cfg.IntOpt('cache_expiration',
+               default=600,
+               help="Expiration period (in seconds) to refresh the ticket cache."),
 ]
 
 CONF = cfg.CONF
@@ -56,11 +59,12 @@ CONF.register_opts(opts, group="request_tracker")
 class RequestTracker(object):
     def __init__(self):
         self.conn  = self._connect()
-        self.cache = []
+        self.cache_data = []
+        self.cache_timestamp = 0
+        self.custom_field = CONF.request_tracker.alarm_custom_field
         
         if CONF.request_tracker.noop:
             logger.info("Requested noop option. Will not execute POST (create, edit, ..) operations.")
-        self.load_cache()
 
 
     def _connect(self):
@@ -68,48 +72,39 @@ class RequestTracker(object):
                           CONF.request_tracker.username, 
                           CONF.request_tracker.password, 
                           CookieAuthenticator)
-  
 
-    def _find(self, alarm_id):
-        """Searches for a ticket that contains the <alarm_id> in the custom
-           field specified in configuration.
 
-           Returns a dictionary with the ticket's fields if found.
+    def get_tickets(self):
+        """Return the tickets managed by delato.
+
+           It relies on a cache mechanism which is updated whenever the given expiration
+           time is reached.
         """
-        logger.debug("Searching for a ticket with alarm ID <%s>" % alarm_id)
-        for t in self.cache:
-            try:
-                if t['CF.{%s}' % CONF.request_tracker.alarm_custom_field] == alarm_id:
-                    logger.info("Found a matching ticket: %s" % t)
-                    return t
-                else:
-                    kk = t['CF.{%s}' % CONF.request_tracker.alarm_custom_field]
-                    logging.info("Theorically not mached relation: (%s, %s)" % (kk, alarm_id))
-            except KeyError:
-                logger.debug("Ticket %s has no <%s> custom field defined" 
-                             % (t, CONF.request_tracker.alarm_custom_field))
-            logger.info("No matching ticket found for alarm ID <%s>" % alarm_id)
-        return False
-
-
-    def get_ticket(self, ticket_id=None):
-        if ticket_id:
-            logger.debug("Retrieving ticket %s data" % ticket_id)
-            return [dict(self.conn.get(path="ticket/%s" % ticket_id).parsed[0])]
-        else:
-            logger.debug("Retrieving ALL ticket's data")
+        last_update_seconds = time.time()-self.cache_timestamp
+        if last_update_seconds > CONF.request_tracker.cache_expiration:
             response = self.conn.get(path=("search/ticket?query=Queue='%s'"
                                             "+AND+(Status='new'+OR+Status='"
-                                            "open'+OR+Status='stalled')" 
-                                            % CONF.request_tracker.queue))
+                                            "open'+OR+Status='stalled')"
+                                            "+AND+'CF.{%s}'LIKE'%%'"
+                                            % (CONF.request_tracker.queue,
+                                               self.custom_field)))
             l = []
             for t in response.parsed[0]:
                 id, title = t
                 d = dict(self.conn.get(path="ticket/%s" % id).parsed[0])
-                if d['CF.{%s}' % CONF.request_tracker.alarm_custom_field]:
-                    l.append(d)
-            return l
+                l.append(d)
+            self.cache_data = l
+            self.cache_timestamp = time.time()
+            logger.debug("Cache preservation (%s) exceeded by %.2f seconds. Cache updated." 
+                          % (CONF.request_tracker.cache_expiration, last_update_seconds))
+        
+        logger.debug("CACHE entries: %s" % len(self.cache_data))
+        logger.debug("CACHE content: %s" % self.cache_data)
+        
+        return self.cache_data
 
+    # Cache property
+    cache = property(get_tickets)
 
     def set_status(self, ticket_id, status):
         """Sets the status of the ticket.
@@ -167,37 +162,24 @@ class RequestTracker(object):
         except KeyError, e:
             raise delato.exception.MissingTemplateArgument(str(e))
 
-        if CONF.request_tracker.alarm_custom_field: 
-            payload["content"]["CF-%s" % CONF.request_tracker.alarm_custom_field] = alarm_id
+        if self.custom_field: 
+            payload["content"]["CF-%s" % self.custom_field] = alarm_id
        
         logger.debug("Ticket content: %s" % payload["content"])
-        if not self._find(alarm_id):
-            logging.info("Creating ticket for alarm ID: %s" % alarm_id)
-            if not CONF.request_tracker.noop:
-                try:
-                    response = self.conn.post(path='ticket/new', payload=payload,)
-                    logger.info("Ticket created: %s" % dir(response))
-                    logger.info("Ticket status: %s" % response.status)
-                    logger.info("Ticket status int: %s" % response.status_int)
-                    logger.info("Ticket body: %s" % response.body)
-                    logger.info("Ticket parsed: %s" % response.parsed)
-                    if response.status_int != 200:
-                        raise delato.exception.CreateTicketException(response.status)
-                    ticket_id = response.parsed[0][0][1].split("/")[1]
-                    logger.info("Ticket %s has been successfully created" % ticket_id)
-                except RTResourceError as e:
-                    logger.error(e.response.status_int)
-                    logger.error(e.response.status)
-                    logger.error(e.response.parsed)
-        else:
-            logging.debug("Not creating ticket for alarm ID <%s>" % alarm_id)
-
-
-    def load_cache(self):
-        """Stores the open tickets in memory.
-
-           Just stores the ones with the custom field set.
-        """
-        self.cache = self.get_ticket()
-        logger.debug("Cache content: %s" % self.cache)
-
+        logging.info("Creating ticket for alarm ID: %s" % alarm_id)
+        if not CONF.request_tracker.noop:
+            try:
+                response = self.conn.post(path='ticket/new', payload=payload,)
+                logger.info("Ticket created: %s" % dir(response))
+                logger.info("Ticket status: %s" % response.status)
+                logger.info("Ticket status int: %s" % response.status_int)
+                logger.info("Ticket body: %s" % response.body)
+                logger.info("Ticket parsed: %s" % response.parsed)
+                if response.status_int != 200:
+                    raise delato.exception.CreateTicketException(response.status)
+                ticket_id = response.parsed[0][0][1].split("/")[1]
+                logger.info("Ticket %s has been successfully created" % ticket_id)
+            except RTResourceError as e:
+                logger.error(e.response.status_int)
+                logger.error(e.response.status)
+                logger.error(e.response.parsed)

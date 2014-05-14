@@ -4,6 +4,7 @@ import sys
 import delato.config
 import delato.log
 import delato.threads
+import delato.request_tracker
 
 from oslo.config import cfg
 
@@ -18,12 +19,14 @@ def main():
         sys.exit(-1)
     delato.log.setup_logging()
 
+    its = delato.request_tracker.RequestTracker()
+    mon = delato.zabbix.Zabbix()
+
     l = []
     try: 
         for t in [ 
-            delato.threads.TicketCacheThread(),
-            delato.threads.TicketCreatorThread(),
-            delato.threads.TicketReminderThread(),
+            delato.threads.TicketCreatorThread(its, mon),
+            delato.threads.TicketReminderThread(its),
         ]:
             t.start()
             l.append(t)

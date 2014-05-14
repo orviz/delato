@@ -20,30 +20,12 @@ opts = [
 CONF = cfg.CONF
 CONF.register_opts(opts)
 
-CACHE = {}
-CACHE_LOCK = threading.Lock()
-
-
-class TicketCacheThread(threading.Thread):
-    def __init__(self, its=delato.request_tracker.RequestTracker):
-        super(TicketCacheThread, self).__init__()
-        self.event = threading.Event()
-        self.its = its()
-
-    def run(self):
-        while not self.event.is_set():
-            with CACHE_LOCK:
-                CACHE = self.its.get_ticket()
-                logger.debug("Ticket cache updated. Triggered by CacheThread (regular basis).")
-            self.event.wait(200)
-        logger.info("Exiting from TicketCacheThread.")
-
 
 class TicketReminderThread(threading.Thread):
-    def __init__(self, its=delato.request_tracker.RequestTracker):
+    def __init__(self, its):
         super(TicketReminderThread, self).__init__()
         self.event = threading.Event()
-        self.its = its()
+        self.its = its
 
     def run(self):
         reminder_update = delato.request_tracker.CONF.request_tracker.reminder_update
@@ -56,7 +38,6 @@ class TicketReminderThread(threading.Thread):
                     if time.time()-last_updated_epoch > reminder_update:
                         self.its.comment(t["id"])
                 
-                self.its.load_cache()
                 self.event.wait(10)
         else:
             logger.info("Reminder capabilities are not enabled.")
@@ -65,15 +46,15 @@ class TicketReminderThread(threading.Thread):
 
 
 class TicketCreatorThread(threading.Thread): 
-    def __init__(self, its=delato.request_tracker.RequestTracker, mon=delato.zabbix.Zabbix):
+    def __init__(self, its, mon):
         super(TicketCreatorThread, self).__init__()
         self.event = threading.Event()
-        self.its = its()
-        self.mon = mon()
+        self.its = its
+        self.mon = mon
 
     def run(self):
         if CONF.invalidate_tickets:
-            self.its.set_status([d["id"] for d in self.its.get_ticket()], "rejected")
+            self.its.set_status([d["id"] for d in self.its.cache], "rejected")
 
         while not self.event.is_set():
             for d in self.mon.collect():
@@ -82,16 +63,15 @@ class TicketCreatorThread(threading.Thread):
                     logger.info("Zabbix trigger (%s) is above the due date limit (%s)"
                                  % (d, d["expiration"]))
                     
-                    self.its.create(d["triggerid"],
-                                     description = d["description"],
-                                     host        = d["hostname"], 
-                                     age         = time.ctime(float(d["lastchange"])),
-                                     severity    = d["severity"],
-                                     expiration  = d["expiration"])
-            with CACHE_LOCK:
-                logger.debug("")
-                CACHE = self.its.get_ticket()
-                logger.debug("Ticket cache updated. Triggered by CreatorThread.")
+                    if [_d for _d in self.its.cache if _d["CF.{%s}" % self.its.custom_field] == d["triggerid"]]:
+                        logger.debug("Ticket for alarm ID <%s> already exists" % d["triggerid"])
+                    else:
+                        self.its.create(d["triggerid"],
+                                         description = d["description"],
+                                         host        = d["hostname"], 
+                                         age         = time.ctime(float(d["lastchange"])),
+                                         severity    = d["severity"],
+                                         expiration  = d["expiration"])
 
             self.event.wait(10)
         logger.info("Exiting from TicketCreatorThread.")
