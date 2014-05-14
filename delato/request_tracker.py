@@ -88,12 +88,16 @@ class RequestTracker(object):
                                             "+AND+'CF.{%s}'LIKE'%%'"
                                             % (CONF.request_tracker.queue,
                                                self.custom_field)))
-            l = []
-            for t in response.parsed[0]:
-                id, title = t
-                d = dict(self.conn.get(path="ticket/%s" % id).parsed[0])
-                l.append(d)
-            self.cache_data = l
+            try:
+                l = []
+                for t in response.parsed[0]:
+                    id, title = t
+                    d = dict(self.conn.get(path="ticket/%s" % id).parsed[0])
+                    l.append(d)
+                self.cache_data = l
+            except IndexError:
+                self.cache_data = []
+
             self.cache_timestamp = time.time()
             logger.debug("Cache preservation (%s) exceeded by %.2f seconds. Cache updated." 
                           % (CONF.request_tracker.cache_expiration, last_update_seconds))
