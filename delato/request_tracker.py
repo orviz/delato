@@ -73,8 +73,19 @@ class RequestTracker(object):
                           CONF.request_tracker.password, 
                           CookieAuthenticator)
 
+    
+    def get_ticket(self, ticket_id):
+        """Gets the ticket data for the given ID.
+           
+           <ticket_id> is a string with the form 'ticket/<id>'.
+        """
+        response = self.conn.get(path="%s" % ticket_id)
+        if response.status_int != 200:
+            raise delato.exception.GetTicketException(response.status)
+        return dict(response.parsed[0])
 
-    def get_tickets(self):
+
+    def load_cache(self):
         """Return the tickets managed by delato.
 
            It relies on a cache mechanism which is updated whenever the given expiration
@@ -92,8 +103,7 @@ class RequestTracker(object):
                 l = []
                 for t in response.parsed[0]:
                     id, title = t
-                    d = dict(self.conn.get(path="ticket/%s" % id).parsed[0])
-                    l.append(d)
+                    l.append(self.get_ticket("ticket/%s" % id))
                 self.cache_data = l
             except IndexError:
                 self.cache_data = []
@@ -107,8 +117,10 @@ class RequestTracker(object):
         
         return self.cache_data
 
+
     # Cache property
-    cache = property(get_tickets)
+    cache = property(load_cache)
+
 
     def set_status(self, ticket_id, status):
         """Sets the status of the ticket.
@@ -174,15 +186,17 @@ class RequestTracker(object):
         if not CONF.request_tracker.noop:
             try:
                 response = self.conn.post(path='ticket/new', payload=payload,)
-                logger.info("Ticket created: %s" % dir(response))
-                logger.info("Ticket status: %s" % response.status)
-                logger.info("Ticket status int: %s" % response.status_int)
-                logger.info("Ticket body: %s" % response.body)
-                logger.info("Ticket parsed: %s" % response.parsed)
+                logger.debug("Ticket parsed: %s" % response.parsed)
+                logger.debug("Ticket status: %s" % response.status)
                 if response.status_int != 200:
                     raise delato.exception.CreateTicketException(response.status)
-                ticket_id = response.parsed[0][0][1].split("/")[1]
-                logger.info("Ticket %s has been successfully created" % ticket_id)
+                ticket_id = response.parsed[0][0][1]
+                ticket_no = ticket_id.split("/")[1]
+                logger.info("Ticket %s has been successfully created" 
+                             % ticket_no)
+                self.cache_data.append(self.get_ticket(ticket_id))
+                logger.debug("CACHE updated with the recently created ticket %s" 
+                              % ticket_no)
             except RTResourceError as e:
                 logger.error(e.response.status_int)
                 logger.error(e.response.status)
