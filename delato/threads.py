@@ -28,6 +28,9 @@ class TicketReminderThread(threading.Thread):
         self.its = its
 
     def run(self):
+        # FIXME These threads must start at different stages. If not the cache
+        # will be updated twice at the thread start. 
+        time.sleep(20)
         reminder_update = delato.request_tracker.CONF.request_tracker.reminder_update
         if reminder_update:
             pattern = '%a %b %d %H:%M:%S %Y'

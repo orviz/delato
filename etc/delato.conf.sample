@@ -96,6 +96,11 @@ use_syslog = False
 # Defaults: 600
 #cache_expiration =
 
+# Reopens the ticket in case the alarm ID associated matches
+# with an already existing rejected ticket.
+# Defaults: True
+#reopen_rejected =  
+
 # POST actions (create, edit, ..) on tickets will not be executed.
 # Defaults: False
 #noop = False

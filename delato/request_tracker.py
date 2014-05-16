@@ -50,6 +50,9 @@ opts = [
     cfg.IntOpt('cache_expiration',
                default=600,
                help="Expiration period (in seconds) to refresh the ticket cache."),
+    cfg.BoolOpt('reopen_rejected',
+               default=True,
+               help="Reopens a ticket in case it has been already rejected."),
 ]
 
 CONF = cfg.CONF
@@ -64,8 +67,12 @@ class RequestTracker(object):
         self.custom_field = CONF.request_tracker.alarm_custom_field
         
         if CONF.request_tracker.noop:
-            logger.info("Requested noop option. Will not execute POST (create, edit, ..) operations.")
-
+            logger.info(("Requested noop option. Will not execute POST "
+                         "(create, edit, ..) operations."))
+        if CONF.request_tracker.reopen_rejected:
+            logger.debug(("Reopen rejected tickets in case the same alarm "
+                          "ID is re-triggered."))
+            
 
     def _connect(self):
         return RTResource('%s/REST/1.0/' % CONF.request_tracker.url,
@@ -85,32 +92,39 @@ class RequestTracker(object):
         return dict(response.parsed[0])
 
 
-    def load_cache(self):
-        """Return the tickets managed by delato.
+    def search(self, status):
+        """Searches for tickets that are in the given status."""
+        status_cond = "+OR+".join(["Status='%s'" % st for st in status])
+        response = self.conn.get(path=("search/ticket?query=Queue='%s'"
+                                       "+AND+(%s)+AND+'CF.{%s}'LIKE'%%'"
+                                       % (CONF.request_tracker.queue,
+                                          status_cond,
+                                          self.custom_field)))
+        l = []
+        try:
+            for t in response.parsed[0]:
+                id, title = t
+                l.append(self.get_ticket("ticket/%s" % id))
+        except IndexError:
+            pass
 
-           It relies on a cache mechanism which is updated whenever the given expiration
-           time is reached.
+        return l
+
+    def load_cache(self):
+        """Return the open tickets managed by delato.
+
+           It relies on a cache mechanism which is updated whenever 
+           the given expiration time is reached.
         """
+        status = ["new", "open", "stalled"]
         last_update_seconds = time.time()-self.cache_timestamp
         if last_update_seconds > CONF.request_tracker.cache_expiration:
-            response = self.conn.get(path=("search/ticket?query=Queue='%s'"
-                                            "+AND+(Status='new'+OR+Status='"
-                                            "open'+OR+Status='stalled')"
-                                            "+AND+'CF.{%s}'LIKE'%%'"
-                                            % (CONF.request_tracker.queue,
-                                               self.custom_field)))
-            try:
-                l = []
-                for t in response.parsed[0]:
-                    id, title = t
-                    l.append(self.get_ticket("ticket/%s" % id))
-                self.cache_data = l
-            except IndexError:
-                self.cache_data = []
-
+            self.cache_data = self.search(status)
             self.cache_timestamp = time.time()
-            logger.debug("Cache preservation (%s) exceeded by %.2f seconds. Cache updated." 
-                          % (CONF.request_tracker.cache_expiration, last_update_seconds))
+            logger.debug(("Cache preservation (%s) exceeded by %.2f "
+                          "seconds. Cache updated." 
+                          % (CONF.request_tracker.cache_expiration,
+                             last_update_seconds)))
         
         logger.debug("CACHE entries: %s" % len(self.cache_data))
         logger.debug("CACHE content: %s" % self.cache_data)
@@ -121,7 +135,6 @@ class RequestTracker(object):
     # Cache property
     cache = property(load_cache)
 
-
     def set_status(self, ticket_id, status):
         """Sets the status of the ticket.
 
@@ -130,7 +143,8 @@ class RequestTracker(object):
            <status> one of the supported RT ticket status.
         """
         if not isinstance(ticket_id, list):
-            raise UpdateTicketException("close function expects a list of tickets as input.")
+            raise delato.exception.UpdateTicketException(("close function expects a "
+                                                         "list of tickets as input."))
         
         payload = { "content": {'Status': status}}
         for t_id in ticket_id:
@@ -138,7 +152,7 @@ class RequestTracker(object):
                 response = self.conn.post(path="%s/edit" % t_id, payload=payload)
                 if response.status_int != 200:
                     raise delato.exception.UpdateTicketException(response.status)
-            logger.debug("Ticket %s set to %s status" % (t_id, status))
+            logger.debug("Ticket '%s' set to %s status" % (t_id, status))
 
 
     def comment(self, ticket_id, **kwargs):
@@ -165,8 +179,18 @@ class RequestTracker(object):
                       this alarm are only mapped to one ticket.
            KWARGS     must contain the keys being used in the templates.
         """
+        if CONF.request_tracker.reopen_rejected:
+            l = [d for d in self.search(status=["rejected"]) 
+                   if d["CF.{%s}" % self.custom_field] == alarm_id]
+            if l:
+                logger.debug(("Found a ticket '%s' in rejected status with "
+                              "the same alarm ID %s associated."
+                              % (l[0]["id"], alarm_id)))
+                self.set_status([l[0]["id"]], "open")
+                return  
+
+        logger.debug("Creating ticket for alarm %s" % alarm_id)
         kwargs.update({"alarm_id": alarm_id})
-        logger.debug("Keyword arguments: %s" % kwargs)
         try:
             payload = {
                 "content": {
@@ -178,11 +202,9 @@ class RequestTracker(object):
         except KeyError, e:
             raise delato.exception.MissingTemplateArgument(str(e))
 
-        if self.custom_field: 
-            payload["content"]["CF-%s" % self.custom_field] = alarm_id
-       
+        payload["content"]["CF-%s" % self.custom_field] = alarm_id
         logger.debug("Ticket content: %s" % payload["content"])
-        logging.info("Creating ticket for alarm ID: %s" % alarm_id)
+        
         if not CONF.request_tracker.noop:
             try:
                 response = self.conn.post(path='ticket/new', payload=payload,)
@@ -192,8 +214,8 @@ class RequestTracker(object):
                     raise delato.exception.CreateTicketException(response.status)
                 ticket_id = response.parsed[0][0][1]
                 ticket_no = ticket_id.split("/")[1]
-                logger.info("Ticket %s has been successfully created" 
-                             % ticket_no)
+                logger.info("Ticket %s (alarm %s) has been successfully created" 
+                             % (ticket_no, alarm_id))
                 self.cache_data.append(self.get_ticket(ticket_id))
                 logger.debug("CACHE updated with the recently created ticket %s" 
                               % ticket_no)
